@@ -5,19 +5,18 @@ import { useAuth } from '../hooks/useAuth';
 import { autenticarCracha, registrarScan } from '../lib/db';
 import { unlockAudio } from './OperatorApp';
 
+type Modo = 'escolha' | 'scan' | 'manual';
+
 export function Login() {
   const { login } = useAuth();
   const nav = useNavigate();
   const [erro, setErro] = useState<string | null>(null);
   const [manualInput, setManualInput] = useState('');
-  const [showManual, setShowManual] = useState(false);
+  const [modo, setModo] = useState<Modo>('escolha');
   const [carregando, setCarregando] = useState(false);
 
   const processar = async (raw: string) => {
-    // Destrava o audio no mobile (requer um gesture; esse processo
-    // é disparado por scan OU por clique no botão "Entrar")
     unlockAudio();
-
     setErro(null);
     setCarregando(true);
     try {
@@ -44,34 +43,53 @@ export function Login() {
     }
   };
 
+  const iniciarScan = () => {
+    unlockAudio();          // destrava áudio neste gesto do usuário
+    setModo('scan');
+    setErro(null);
+  };
+
+  const iniciarManual = () => {
+    unlockAudio();
+    setModo('manual');
+    setErro(null);
+  };
+
   return (
     <div className="phone-screen">
       <div className="screen-pad">
         <div className="hero-icon">👤</div>
         <h2 className="step-title">Scan do crachá</h2>
-        <p className="step-subtitle">
-          Aproxime o celular do seu crachá para iniciar o turno
-        </p>
+        <p className="step-subtitle">Escolha como se identificar</p>
 
-        {!showManual ? (
+        {modo === 'escolha' && (
           <>
-            <Scanner onScan={processar} hint="Aponte a câmera para o QR do crachá" />
-            <button
-              className="btn btn-ghost"
-              type="button"
-              onClick={() => setShowManual(true)}
-              disabled={carregando}
-            >
-              Digitar matrícula do crachá
+            <button className="btn btn-primary" type="button" onClick={iniciarScan}>
+              📷 Scanear crachá
+            </button>
+            <button className="btn btn-ghost" type="button" onClick={iniciarManual}>
+              ⌨ Digitar matrícula
             </button>
           </>
-        ) : (
+        )}
+
+        {modo === 'scan' && (
+          <>
+            <Scanner onScan={processar} hint="Aponte a câmera para o QR do crachá" />
+            <button className="btn btn-ghost" type="button" onClick={() => setModo('escolha')}>
+              Voltar
+            </button>
+          </>
+        )}
+
+        {modo === 'manual' && (
           <>
             <input
               className="input"
               placeholder="Ex: CR-ERK001"
               value={manualInput}
               onChange={(e) => setManualInput(e.target.value)}
+              autoFocus
             />
             <button
               className="btn btn-primary"
@@ -84,10 +102,10 @@ export function Login() {
             <button
               className="btn btn-ghost"
               type="button"
-              onClick={() => setShowManual(false)}
+              onClick={() => setModo('escolha')}
               disabled={carregando}
             >
-              Voltar para o scan
+              Voltar
             </button>
           </>
         )}
