@@ -565,3 +565,21 @@ tbody tr:hover td { background: var(--surface-2); }
   color: var(--text-2);
   font-size: 14px;
 }
+
+/* Indicador visual do tap-to-focus do scanner */
+.focus-indicator {
+  position: absolute;
+  width: 56px;
+  height: 56px;
+  border: 2px solid var(--success);
+  border-radius: 8px;
+  pointer-events: none;
+  z-index: 10;
+  box-shadow: 0 0 20px rgba(56,209,115,0.5), inset 0 0 10px rgba(56,209,115,0.2);
+  animation: focus-pulse 0.9s ease-out forwards;
+}
+@keyframes focus-pulse {
+  0%   { opacity: 1; transform: scale(1.6); }
+  40%  { opacity: 1; transform: scale(1); }
+  100% { opacity: 0; transform: scale(0.9); }
+}
