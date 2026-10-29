@@ -32,8 +32,20 @@ export function Scanner({ onScan, active = true, hint }: Props) {
     const start = async () => {
       try {
         await scanner.start(
-          { facingMode: 'environment' },
-          { fps: 10, qrbox: { width: 240, height: 240 }, aspectRatio: 1.0 },
+          {
+            facingMode: 'environment',
+            // Peça resolução maior para melhorar a leitura em etiquetas pequenas
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
+            advanced: [{ focusMode: 'continuous' } as unknown as MediaTrackConstraints]
+          } as MediaTrackConstraints,
+          {
+            fps: 20,                              // mais quadros/segundo = detecta mais rápido
+            qrbox: { width: 280, height: 280 },   // área maior
+            aspectRatio: 1.0,
+            disableFlip: false,                   // tenta QR espelhado também
+            experimentalFeatures: { useBarCodeDetectorIfSupported: true }
+          },
           (text) => {
             if (handledRef.current) return;
             handledRef.current = true;
