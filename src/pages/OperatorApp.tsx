@@ -279,8 +279,8 @@ export function OperatorApp() {
           <>
             <div className="section-eyebrow">Missão aberta</div>
             <div className="mission-card">
-              {m.foto_url ? (
-                <img src={m.foto_url} alt={m.descricao} className="part-photo-img" />
+              {state.peca.foto_url ? (
+                <img src={state.peca.foto_url} alt={state.peca.descricao} className="part-photo-img" />
               ) : (
                 <div className="part-photo">📷 Foto não cadastrada para esta peça</div>
               )}
