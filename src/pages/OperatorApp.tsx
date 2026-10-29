@@ -7,6 +7,7 @@ import {
 } from '../lib/db';
 import { parseBoxCode } from '../lib/parser';
 import type { ParsedBox, PecaBuscada } from '../lib/types';
+import { ERROR_WAV_URI, SUCCESS_WAV_URI } from '../lib/sounds';
 
 type Step = 'idle' | 'klt' | 'mission' | 'address' | 'box' | 'confirm' | 'done';
 
@@ -43,63 +44,75 @@ function normalizarCodigo(c: string): string {
 }
 
 /**
- * AudioContext singleton — criado uma vez e reutilizado.
- * Em mobile precisa ser destravado por um gesture do usuário
- * (o próprio toque no botão de login já libera).
+ * Áudio via HTMLAudioElement + data URI (WAV embutido). Essa é a
+ * abordagem mais compatível com iPhone/Safari — a Web Audio API
+ * sozinha é bloqueada em iOS mesmo após gesture em muitos casos.
+ *
+ * Fluxo:
+ *   1. unlockAudio() é chamado dentro de um handler de clique (login).
+ *   2. O audio dá play() silencioso, destrava a reprodução futura.
+ *   3. playErrorAlert() / playSuccess() podem rodar fora de gesture.
  */
-let _audioCtx: AudioContext | null = null;
-function getAudioCtx(): AudioContext | null {
-  if (_audioCtx) return _audioCtx;
-  const AnyWin = window as unknown as { AudioContext?: typeof AudioContext; webkitAudioContext?: typeof AudioContext };
-  const AC = AnyWin.AudioContext || AnyWin.webkitAudioContext;
-  if (!AC) return null;
-  try { _audioCtx = new AC(); } catch { return null; }
-  return _audioCtx;
+let _errorAudio: HTMLAudioElement | null = null;
+let _successAudio: HTMLAudioElement | null = null;
+let _audioUnlocked = false;
+
+function createAudio(uri: string): HTMLAudioElement {
+  const a = new Audio(uri);
+  a.preload = 'auto';
+  a.volume = 1.0;
+  return a;
 }
 
-/** Chame em um handler de clique/toque para destravar o audio em mobile. */
+/** Chame dentro de um handler de clique/toque (login) para destravar o audio em iOS. */
 export function unlockAudio() {
-  const ctx = getAudioCtx();
-  if (ctx && ctx.state === 'suspended') {
-    ctx.resume().catch(() => {});
+  if (_audioUnlocked) return;
+  try {
+    _errorAudio = createAudio(ERROR_WAV_URI);
+    _successAudio = createAudio(SUCCESS_WAV_URI);
+    // "Toque silencioso" para destravar: muta, dá play, pausa, volta volume
+    [_errorAudio, _successAudio].forEach((a) => {
+      a.muted = true;
+      const p = a.play();
+      if (p && typeof p.then === 'function') {
+        p.then(() => { a.pause(); a.currentTime = 0; a.muted = false; })
+         .catch(() => { a.muted = false; });
+      } else {
+        a.pause(); a.muted = false;
+      }
+    });
+    _audioUnlocked = true;
+  } catch { /* ignora */ }
+}
+
+function play(audio: HTMLAudioElement | null) {
+  if (!audio) return;
+  try {
+    audio.currentTime = 0;
+    const p = audio.play();
+    if (p && typeof p.catch === 'function') p.catch(() => {});
+  } catch { /* ignora */ }
+}
+
+/** Alerta sonoro + vibração — disparado em cenário de divergência. */
+function playErrorAlert() {
+  if (!_errorAudio) {
+    try { _errorAudio = createAudio(ERROR_WAV_URI); } catch { /* ignora */ }
+  }
+  play(_errorAudio);
+  if ('vibrate' in navigator) {
+    try { navigator.vibrate([250, 80, 250, 80, 250, 80, 400]); } catch { /* ignora */ }
   }
 }
 
-/**
- * Alerta sonoro intermitente + vibração — disparado em cenário de
- * divergência. Volume elevado (gain 0.5) para ser audível no chão
- * de fábrica. Resume() é chamado antes de tocar para funcionar em
- * Chrome/Safari mobile.
- */
-function playErrorAlert() {
-  const ctx = getAudioCtx();
-  if (ctx) {
-    try {
-      if (ctx.state === 'suspended') {
-        ctx.resume().catch(() => {});
-      }
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.type = 'square';
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      gain.gain.value = 0.5;
-      osc.start();
-      const t = ctx.currentTime;
-      // Padrão de alarme bip-bip-bip
-      osc.frequency.setValueAtTime(880, t);
-      osc.frequency.setValueAtTime(0,   t + 0.14);
-      osc.frequency.setValueAtTime(880, t + 0.22);
-      osc.frequency.setValueAtTime(0,   t + 0.36);
-      osc.frequency.setValueAtTime(880, t + 0.44);
-      osc.frequency.setValueAtTime(0,   t + 0.58);
-      osc.frequency.setValueAtTime(880, t + 0.66);
-      osc.stop(t + 0.86);
-    } catch { /* ignora */ }
+/** Som curto de confirmação quando o abastecimento é concluído OK. */
+function playSuccess() {
+  if (!_successAudio) {
+    try { _successAudio = createAudio(SUCCESS_WAV_URI); } catch { /* ignora */ }
   }
-
+  play(_successAudio);
   if ('vibrate' in navigator) {
-    try { navigator.vibrate([250, 80, 250, 80, 250, 80, 400]); } catch { /* idem */ }
+    try { navigator.vibrate(80); } catch { /* ignora */ }
   }
 }
 
@@ -261,6 +274,7 @@ export function OperatorApp() {
         qtd_digitada_manual: state.qtdManual,
         status: state.validacaoOk ? 'concluido' : 'divergente'
       });
+      if (state.validacaoOk) playSuccess();
       setStep('done');
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'erro';

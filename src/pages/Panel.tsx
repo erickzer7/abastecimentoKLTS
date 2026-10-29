@@ -84,26 +84,44 @@ export function Panel() {
         </div>
 
         <div className="panel-section">
-          <h2>Últimos ciclos <span className="meta">{ciclos.length}</span></h2>
+          <h2>Últimos ciclos <span className="meta">{ciclos.length} · divergentes → em rota → concluídos</span></h2>
           <div className="table-wrap">
-            <table>
+            <table className="ciclos-table">
               <thead>
                 <tr>
-                  <th>Horário</th>
+                  <th>Quando</th>
                   <th>Operador</th>
                   <th>Peça</th>
-                  <th>End.</th>
+                  <th>Endereço</th>
                   <th>Qtd</th>
-                  <th>Dur.</th>
+                  <th>Lote</th>
+                  <th>Duração</th>
                   <th>Status</th>
                 </tr>
               </thead>
               <tbody>
                 {ciclos.map(c => (
-                  <tr key={c.id}>
-                    <td className="muted">{fmtHora(c.timestamp_abertura)}</td>
+                  <tr key={c.id} className={`row-${c.status}`}>
+                    <td className="muted" style={{whiteSpace:'nowrap'}}>
+                      <div>{fmtHora(c.timestamp_abertura)}</div>
+                      <div style={{fontSize:10, color:'var(--text-3)'}}>{fmtData(c.timestamp_abertura)}</div>
+                    </td>
                     <td>{c.operador_nome ?? '—'}</td>
-                    <td className="mono">{c.klt_codigo_scaneado}</td>
+                    <td>
+                      <div className="mono" style={{fontWeight:600, color:'var(--text)'}}>
+                        {c.klt_codigo_scaneado}
+                      </div>
+                      {c.descricao && (
+                        <div style={{fontSize:11, color:'var(--text-2)', lineHeight:1.3, marginTop:2}}>
+                          {c.descricao}
+                        </div>
+                      )}
+                      {c.status === 'divergente' && c.caixa_peca_lida && (
+                        <div style={{fontSize:11, color:'var(--danger)', marginTop:4, fontFamily:'SF Mono,monospace'}}>
+                          ✗ Scaneada: {c.caixa_peca_lida}
+                        </div>
+                      )}
+                    </td>
                     <td className="muted">{c.endereco_busca ?? '—'}</td>
                     <td>
                       {c.qtd_abastecida ?? '—'}
@@ -111,12 +129,15 @@ export function Panel() {
                         <span title="Qtd digitada manualmente" style={{color:'var(--warning)',marginLeft:4}}>✎</span>
                       )}
                     </td>
+                    <td className="muted" style={{fontFamily:'SF Mono,monospace', fontSize:11}}>
+                      {c.caixa_lote ?? '—'}
+                    </td>
                     <td className="muted">{c.duracao_segundos ? fmtDuracao(c.duracao_segundos) : '—'}</td>
                     <td><StatusPill s={c.status} /></td>
                   </tr>
                 ))}
                 {ciclos.length === 0 && (
-                  <tr><td colSpan={7} className="muted" style={{textAlign:'center',padding:24}}>
+                  <tr><td colSpan={8} className="muted" style={{textAlign:'center',padding:24}}>
                     Nenhum ciclo registrado ainda.
                   </td></tr>
                 )}
@@ -162,4 +183,16 @@ function fmtDuracao(seg: number): string {
 function fmtHora(iso: string): string {
   try { return new Date(iso).toLocaleTimeString('pt-BR').slice(0, 5); }
   catch { return iso; }
+}
+
+function fmtData(iso: string): string {
+  try {
+    const d = new Date(iso);
+    const hoje = new Date();
+    if (d.toDateString() === hoje.toDateString()) return 'hoje';
+    const ontem = new Date(hoje); ontem.setDate(ontem.getDate() - 1);
+    if (d.toDateString() === ontem.toDateString()) return 'ontem';
+    return d.toLocaleDateString('pt-BR').slice(0, 5);  // dd/mm
+  }
+  catch { return ''; }
 }
