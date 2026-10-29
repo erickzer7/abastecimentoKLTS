@@ -54,11 +54,13 @@ export function Scanner({ onScan, active = true, hint }: Props) {
   // 2. Inicia o scanner apenas quando a permissão permite (granted ou prompt/unavailable)
   useEffect(() => {
     if (!active || !containerRef.current) return;
+    const host = containerRef.current;
     if (permState === 'checking' || permState === 'denied') return;
 
     handledRef.current = false;
-    const el = containerRef.current;
-    if (!el.id) el.id = 'qr-reader-' + Math.random().toString(36).slice(2);
+    const el = document.createElement('div');
+    el.id = 'qr-reader-' + Math.random().toString(36).slice(2);
+    host.appendChild(el);
 
     let cancelled = false;
     const scanner = new Html5Qrcode(el.id, false);
@@ -83,7 +85,7 @@ export function Scanner({ onScan, active = true, hint }: Props) {
           videoConstraints,
           scanConfig,
           (text) => {
-            if (handledRef.current) return;
+            if (handledRef.current || cancelled) return;
             handledRef.current = true;
             onScan(text);
           },
@@ -108,7 +110,16 @@ export function Scanner({ onScan, active = true, hint }: Props) {
 
     return () => {
       cancelled = true;
-      scanner.stop().then(() => scanner.clear()).catch(() => {});
+      // stop() lança erro na hora (síncrono) se a câmera não chegou a iniciar — isso derrubava a tela toda
+      try {
+        const st = (scanner as unknown as { getState?: () => number }).getState?.();
+        if (st === 2 || st === 3) {
+          scanner.stop().then(() => { try { scanner.clear(); } catch { /* ok */ } el.remove(); }).catch(() => el.remove());
+        } else {
+          try { scanner.clear(); } catch { /* ok */ }
+          el.remove();
+        }
+      } catch { el.remove(); }
     };
   }, [active, onScan, permState]);
 
