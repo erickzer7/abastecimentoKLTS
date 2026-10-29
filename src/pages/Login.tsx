@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Scanner } from '../components/Scanner';
 import { useAuth } from '../hooks/useAuth';
 import { autenticarCracha, registrarScan } from '../lib/db';
+import { unlockAudio } from './OperatorApp';
 
 export function Login() {
   const { login } = useAuth();
@@ -13,6 +14,10 @@ export function Login() {
   const [carregando, setCarregando] = useState(false);
 
   const processar = async (raw: string) => {
+    // Destrava o audio no mobile (requer um gesture; esse processo
+    // é disparado por scan OU por clique no botão "Entrar")
+    unlockAudio();
+
     setErro(null);
     setCarregando(true);
     try {
