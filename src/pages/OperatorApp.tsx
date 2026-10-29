@@ -279,7 +279,11 @@ export function OperatorApp() {
           <>
             <div className="section-eyebrow">Missão aberta</div>
             <div className="mission-card">
-              <div className="part-photo">📷 Foto da peça (cadastro)</div>
+              {m.foto_url ? (
+                <img src={m.foto_url} alt={m.descricao} className="part-photo-img" />
+              ) : (
+                <div className="part-photo">📷 Foto não cadastrada para esta peça</div>
+              )}
               <Row label="Código" value={state.peca.codigo} mono />
               <Row label="Descrição" value={state.peca.descricao} small />
               <Row label="Modelo" value={state.peca.modelo} />
@@ -377,6 +381,14 @@ export function OperatorApp() {
 
         {step === 'confirm' && state.boxData && state.peca && (
           <>
+            {state.peca.foto_url && (
+              <div className="confirm-photo-wrap">
+                <img src={state.peca.foto_url} alt={state.peca.descricao} className="part-photo-img confirm" />
+                <div className="confirm-photo-label">
+                  Peça esperada: <strong>{state.peca.codigo}</strong>
+                </div>
+              </div>
+            )}
             <div className="parsed-fields">
               <div className="parsed-badge">{state.boxData.formatLabel}</div>
               {state.boxData.partNo && <Parsed k="Código peça" v={state.boxData.partNo} />}
