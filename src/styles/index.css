@@ -158,6 +158,95 @@ html, body {
   padding-top: 4px;
 }
 .confirm-photo-label strong { color: var(--text); font-family: 'SF Mono', monospace; }
+
+/* -------- Divergência: comparação de fotos -------- */
+.divergencia-shell {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  animation: shake 0.4s cubic-bezier(.36,.07,.19,.97) both;
+}
+@keyframes shake {
+  10%, 90% { transform: translate3d(-1px, 0, 0); }
+  20%, 80% { transform: translate3d(2px, 0, 0); }
+  30%, 50%, 70% { transform: translate3d(-4px, 0, 0); }
+  40%, 60% { transform: translate3d(4px, 0, 0); }
+}
+
+.divergencia-header {
+  animation: pulse-red 1.2s ease-in-out 2;
+}
+@keyframes pulse-red {
+  0%, 100% { background: rgba(234,76,76,0.08); }
+  50% { background: rgba(234,76,76,0.28); }
+}
+
+.compare-photos {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.compare-photo {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 10px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+}
+.compare-photo.esperada { border-color: var(--success-dim); }
+.compare-photo.lida { border-color: var(--danger-dim); }
+
+.compare-photo-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  font-weight: 700;
+}
+.compare-photo.esperada .compare-photo-label { color: var(--success); }
+.compare-photo.lida .compare-photo-label { color: var(--danger); }
+
+.compare-photo-img {
+  width: 100%;
+  height: 110px;
+  object-fit: contain;
+  background: #fff;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+}
+
+.compare-photo-nofoto {
+  width: 100%;
+  height: 110px;
+  background: var(--surface-2);
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-3);
+  font-size: 10px;
+  padding: 4px;
+}
+
+.compare-photo-codigo {
+  font-family: 'SF Mono', monospace;
+  font-size: 11px;
+  color: var(--text);
+  font-weight: 600;
+  word-break: break-all;
+}
+.compare-photo.lida .compare-photo-codigo { color: var(--danger); }
+
+.compare-photo-desc {
+  font-size: 10px;
+  color: var(--text-2);
+  line-height: 1.3;
+}
 .mission-row {
   display: flex; justify-content: space-between; align-items: center;
   gap: 12px;
