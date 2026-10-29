@@ -35,37 +35,71 @@ const initialState: CicloState = {
 };
 
 /**
- * Alerta sonoro intermitente + vibração — disparado quando o scan da
- * caixa não bate com a KLT. O som usa Web Audio API (não precisa de
- * asset) e a vibração usa a API do navegador (funciona em Android).
+ * Normaliza um código para comparação, ignorando hífens, espaços
+ * e caixa. "F4J20-3611061" == "F4J203611061" == "f4j203611061".
+ */
+function normalizarCodigo(c: string): string {
+  return c.replace(/[-\s]/g, '').trim().toUpperCase();
+}
+
+/**
+ * AudioContext singleton — criado uma vez e reutilizado.
+ * Em mobile precisa ser destravado por um gesture do usuário
+ * (o próprio toque no botão de login já libera).
+ */
+let _audioCtx: AudioContext | null = null;
+function getAudioCtx(): AudioContext | null {
+  if (_audioCtx) return _audioCtx;
+  const AnyWin = window as unknown as { AudioContext?: typeof AudioContext; webkitAudioContext?: typeof AudioContext };
+  const AC = AnyWin.AudioContext || AnyWin.webkitAudioContext;
+  if (!AC) return null;
+  try { _audioCtx = new AC(); } catch { return null; }
+  return _audioCtx;
+}
+
+/** Chame em um handler de clique/toque para destravar o audio em mobile. */
+export function unlockAudio() {
+  const ctx = getAudioCtx();
+  if (ctx && ctx.state === 'suspended') {
+    ctx.resume().catch(() => {});
+  }
+}
+
+/**
+ * Alerta sonoro intermitente + vibração — disparado em cenário de
+ * divergência. Volume elevado (gain 0.5) para ser audível no chão
+ * de fábrica. Resume() é chamado antes de tocar para funcionar em
+ * Chrome/Safari mobile.
  */
 function playErrorAlert() {
-  try {
-    const AnyWin = window as unknown as { AudioContext?: typeof AudioContext; webkitAudioContext?: typeof AudioContext };
-    const AC = AnyWin.AudioContext || AnyWin.webkitAudioContext;
-    if (AC) {
-      const ctx = new AC();
+  const ctx = getAudioCtx();
+  if (ctx) {
+    try {
+      if (ctx.state === 'suspended') {
+        ctx.resume().catch(() => {});
+      }
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
       osc.type = 'square';
       osc.connect(gain);
       gain.connect(ctx.destination);
-      gain.gain.value = 0.25;
+      gain.gain.value = 0.5;
       osc.start();
-      // Padrão de alarme: duas frequências alternando
       const t = ctx.currentTime;
+      // Padrão de alarme bip-bip-bip
       osc.frequency.setValueAtTime(880, t);
-      osc.frequency.setValueAtTime(440, t + 0.18);
-      osc.frequency.setValueAtTime(880, t + 0.36);
-      osc.frequency.setValueAtTime(440, t + 0.54);
-      osc.frequency.setValueAtTime(880, t + 0.72);
-      osc.stop(t + 0.9);
-      osc.onended = () => { ctx.close().catch(() => {}); };
-    }
-  } catch { /* ignora silenciosamente */ }
+      osc.frequency.setValueAtTime(0,   t + 0.14);
+      osc.frequency.setValueAtTime(880, t + 0.22);
+      osc.frequency.setValueAtTime(0,   t + 0.36);
+      osc.frequency.setValueAtTime(880, t + 0.44);
+      osc.frequency.setValueAtTime(0,   t + 0.58);
+      osc.frequency.setValueAtTime(880, t + 0.66);
+      osc.stop(t + 0.86);
+    } catch { /* ignora */ }
+  }
 
   if ('vibrate' in navigator) {
-    try { navigator.vibrate([250, 100, 250, 100, 400]); } catch { /* idem */ }
+    try { navigator.vibrate([250, 80, 250, 80, 250, 80, 400]); } catch { /* idem */ }
   }
 }
 
@@ -140,7 +174,8 @@ export function OperatorApp() {
     try {
       const scaneado = raw.trim();
       const esperado = state.peca.endereco_busca;
-      const bate = normalize(scaneado) === normalize(esperado);
+      // normalizarCodigo também vale aqui: ignora hífen, espaço, caixa
+      const bate = normalizarCodigo(scaneado) === normalizarCodigo(esperado);
       await registrarEndereco(state.cicloId, scaneado, bate);
       await registrarScan({
         ciclo_id: state.cicloId, operador_id: operador?.id ?? null,
@@ -181,7 +216,7 @@ export function OperatorApp() {
       if (parsed.format === 'chery_v1') {
         ok = true;
         msg = `Formato só traz lote. Validado pelo endereço ${state.peca.endereco_busca}.`;
-      } else if (parsed.partNo && parsed.partNo === state.peca.codigo) {
+      } else if (parsed.partNo && normalizarCodigo(parsed.partNo) === normalizarCodigo(state.peca.codigo)) {
         ok = true;
         msg = `Código bate com o esperado (${state.peca.codigo}).`;
       } else {
@@ -609,9 +644,6 @@ function Parsed({ k, v }: { k: string; v: string | number }) {
   );
 }
 
-function normalize(s: string): string {
-  return s.trim().toUpperCase().replace(/\s+/g, '_');
-}
 
 function fmtDuracao(ms: number): string {
   const s = Math.max(1, Math.floor(ms / 1000));
