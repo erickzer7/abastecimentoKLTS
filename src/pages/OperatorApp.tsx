@@ -14,6 +14,7 @@ interface CicloState {
   cicloId: string | null;
   peca: PecaBuscada | null;
   boxData: ParsedBox | null;
+  boxPeca: PecaBuscada | null;  // peça buscada a partir do código lido (p/ divergência)
   validacaoOk: boolean;
   validacaoMsg: string;
   qtdFinal: number | '';
@@ -25,12 +26,48 @@ const initialState: CicloState = {
   cicloId: null,
   peca: null,
   boxData: null,
+  boxPeca: null,
   validacaoOk: false,
   validacaoMsg: '',
   qtdFinal: '',
   qtdManual: false,
   startedAt: null
 };
+
+/**
+ * Alerta sonoro intermitente + vibração — disparado quando o scan da
+ * caixa não bate com a KLT. O som usa Web Audio API (não precisa de
+ * asset) e a vibração usa a API do navegador (funciona em Android).
+ */
+function playErrorAlert() {
+  try {
+    const AnyWin = window as unknown as { AudioContext?: typeof AudioContext; webkitAudioContext?: typeof AudioContext };
+    const AC = AnyWin.AudioContext || AnyWin.webkitAudioContext;
+    if (AC) {
+      const ctx = new AC();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'square';
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      gain.gain.value = 0.25;
+      osc.start();
+      // Padrão de alarme: duas frequências alternando
+      const t = ctx.currentTime;
+      osc.frequency.setValueAtTime(880, t);
+      osc.frequency.setValueAtTime(440, t + 0.18);
+      osc.frequency.setValueAtTime(880, t + 0.36);
+      osc.frequency.setValueAtTime(440, t + 0.54);
+      osc.frequency.setValueAtTime(880, t + 0.72);
+      osc.stop(t + 0.9);
+      osc.onended = () => { ctx.close().catch(() => {}); };
+    }
+  } catch { /* ignora silenciosamente */ }
+
+  if ('vibrate' in navigator) {
+    try { navigator.vibrate([250, 100, 250, 100, 400]); } catch { /* idem */ }
+  }
+}
 
 export function OperatorApp() {
   const { operador } = useAuth();
@@ -139,6 +176,8 @@ export function OperatorApp() {
 
       // Regra de validação
       let ok = false; let msg = '';
+      let boxPeca: PecaBuscada | null = null;
+
       if (parsed.format === 'chery_v1') {
         ok = true;
         msg = `Formato só traz lote. Validado pelo endereço ${state.peca.endereco_busca}.`;
@@ -148,15 +187,22 @@ export function OperatorApp() {
       } else {
         ok = false;
         msg = `Esperado ${state.peca.codigo}. Veio ${parsed.partNo ?? '(sem código no QR)'}.`;
+        // Registra divergência automaticamente (operador não decide)
         await registrarDivergencia({
           ciclo_id: state.cicloId,
           tipo: 'peca_errada',
           descricao: msg,
           scan_raw: parsed.raw
         });
+        // Busca os dados da peça divergente para mostrar ao operador
+        if (parsed.partNo) {
+          try { boxPeca = await buscarPecaPorCodigo(parsed.partNo); } catch { boxPeca = null; }
+        }
+        // Dispara alerta sonoro + vibração
+        playErrorAlert();
       }
 
-      setState(s => ({ ...s, boxData: parsed, validacaoOk: ok, validacaoMsg: msg }));
+      setState(s => ({ ...s, boxData: parsed, boxPeca, validacaoOk: ok, validacaoMsg: msg }));
       setStep('confirm');
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'erro';
@@ -199,6 +245,16 @@ export function OperatorApp() {
     } catch { /* não trava o reset */ }
     setCarregando(false);
     resetAll();
+  };
+
+  // Volta pra tela de scan de caixa, mantendo o ciclo aberto
+  // (caso o operador tenha pego a caixa errada e vá buscar outra)
+  const voltarParaScanBox = () => {
+    setState(s => ({ ...s, boxData: null, boxPeca: null, validacaoOk: false, validacaoMsg: '' }));
+    setStep('box');
+    setShowManual(false);
+    setManualInput('');
+    setErro(null);
   };
 
   // ---------- UI ----------
@@ -379,7 +435,7 @@ export function OperatorApp() {
           </>
         )}
 
-        {step === 'confirm' && state.boxData && state.peca && (
+        {step === 'confirm' && state.boxData && state.peca && state.validacaoOk && (
           <>
             {state.peca.foto_url && (
               <div className="confirm-photo-wrap">
@@ -396,8 +452,8 @@ export function OperatorApp() {
               {state.boxData.lot && <Parsed k="Lote" v={state.boxData.lot} />}
               {state.boxData.supplier && <Parsed k="Fornecedor" v={state.boxData.supplier} />}
             </div>
-            <div className={`alert ${state.validacaoOk ? 'alert-ok' : 'alert-danger'}`}>
-              <strong>{state.validacaoOk ? '✓ Peça validada' : '✗ DIVERGÊNCIA'}</strong>
+            <div className="alert alert-ok">
+              <strong>✓ Peça validada</strong>
               <div style={{ fontSize: 12, marginTop: 4 }}>{state.validacaoMsg}</div>
             </div>
 
@@ -416,17 +472,74 @@ export function OperatorApp() {
             </div>
 
             <button
-              className={`btn ${state.validacaoOk ? 'btn-success' : 'btn-danger'}`}
+              className="btn btn-success"
               type="button"
               onClick={confirmar}
               disabled={carregando}
             >
-              {state.validacaoOk ? '✓ Confirmar abastecimento' : 'Registrar divergência'}
+              ✓ Confirmar abastecimento
             </button>
             <button className="btn btn-ghost" type="button" onClick={cancelar}>
-              Cancelar
+              Cancelar missão
             </button>
           </>
+        )}
+
+        {step === 'confirm' && state.boxData && state.peca && !state.validacaoOk && (
+          <div className="divergencia-shell">
+            <div className="alert alert-danger divergencia-header">
+              <strong>⚠ PEÇA ERRADA</strong>
+              <div style={{ fontSize: 12, marginTop: 4 }}>
+                Volte para a caixa de origem e pegue a peça correta.
+              </div>
+            </div>
+
+            <div className="compare-photos">
+              <div className="compare-photo esperada">
+                <div className="compare-photo-label">✓ Esperada</div>
+                {state.peca.foto_url ? (
+                  <img src={state.peca.foto_url} alt={state.peca.descricao} className="compare-photo-img" />
+                ) : (
+                  <div className="compare-photo-nofoto">sem foto</div>
+                )}
+                <div className="compare-photo-codigo">{state.peca.codigo}</div>
+                <div className="compare-photo-desc">{state.peca.descricao}</div>
+              </div>
+
+              <div className="compare-photo lida">
+                <div className="compare-photo-label">✗ Scaneada</div>
+                {state.boxPeca?.foto_url ? (
+                  <img src={state.boxPeca.foto_url} alt={state.boxPeca.descricao} className="compare-photo-img" />
+                ) : (
+                  <div className="compare-photo-nofoto">
+                    {state.boxData.partNo ? 'sem foto cadastrada' : 'sem código no QR'}
+                  </div>
+                )}
+                <div className="compare-photo-codigo">
+                  {state.boxData.partNo ?? '—'}
+                </div>
+                <div className="compare-photo-desc">
+                  {state.boxPeca?.descricao ?? 'peça não cadastrada'}
+                </div>
+              </div>
+            </div>
+
+            <div className="info-box" style={{ borderLeftColor: 'var(--danger)' }}>
+              Divergência registrada automaticamente. Toque abaixo para scanear outra caixa.
+            </div>
+
+            <button
+              className="btn btn-primary"
+              type="button"
+              onClick={voltarParaScanBox}
+              disabled={carregando}
+            >
+              📷 Scanear outra caixa
+            </button>
+            <button className="btn btn-ghost" type="button" onClick={cancelar}>
+              Cancelar missão
+            </button>
+          </div>
         )}
 
         {step === 'done' && state.peca && (
