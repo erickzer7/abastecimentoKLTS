@@ -26,6 +26,7 @@ export interface PecaBuscada {
   padrao_qr_caixa: PadraoQrCaixa;
   pendente_atualizacao: boolean;
   variantes_count: number;
+  foto_url: string | null;
 }
 
 export interface Ciclo {
