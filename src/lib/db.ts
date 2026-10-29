@@ -140,6 +140,7 @@ export async function fetchMetricasHoje(): Promise<MetricasHoje | null> {
 export interface CicloResumo {
   id: string;
   timestamp_abertura: string;
+  timestamp_fechamento: string | null;
   duracao_segundos: number | null;
   status: string;
   operador_nome: string | null;
@@ -150,6 +151,9 @@ export interface CicloResumo {
   qtd_cadastrada: number | null;
   qtd_abastecida: number | null;
   qtd_digitada_manual: boolean;
+  caixa_formato: string | null;
+  caixa_peca_lida: string | null;
+  caixa_lote: string | null;
 }
 
 export async function fetchCiclosRecentes(limit = 30): Promise<CicloResumo[]> {
