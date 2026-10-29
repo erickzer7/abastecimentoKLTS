@@ -566,6 +566,46 @@ tbody tr:hover td { background: var(--surface-2); }
   font-size: 14px;
 }
 
+/* Scanner — tela de permissão negada */
+.scanner-denied {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px;
+  text-align: center;
+  box-shadow: var(--shadow-md);
+}
+.scanner-denied-icon {
+  font-size: 44px;
+  line-height: 1;
+  margin-bottom: 10px;
+}
+.scanner-denied-title {
+  font-size: 16px;
+  font-weight: 600;
+  margin: 6px 0 10px;
+  color: var(--text);
+}
+.scanner-denied-text {
+  font-size: 13px;
+  color: var(--text-2);
+  line-height: 1.5;
+  margin: 0 0 14px;
+  text-align: left;
+}
+.scanner-denied-steps {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 12px 10px 12px 28px;
+  margin: 0 0 16px;
+  text-align: left;
+}
+.scanner-denied-steps ol { margin: 0; padding: 0; color: var(--text-2); font-size: 12px; line-height: 1.6; }
+.scanner-denied-steps li { margin-bottom: 6px; }
+.scanner-denied-steps li:last-child { margin-bottom: 0; }
+.scanner-denied-steps strong { color: var(--text); }
+
 /* Indicador visual do tap-to-focus do scanner */
 .focus-indicator {
   position: absolute;
